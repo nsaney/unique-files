@@ -7,7 +7,6 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.regex.Pattern;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 public class UniqueFiles {
@@ -21,16 +20,22 @@ public class UniqueFiles {
 
     ////// Main Method //////
     public static void main(String... args) throws Exception {
-        List<File> files = new ArrayList<>();
+        Map<String, List<File>> fileListsByHash = new HashMap<>();
         for (String arg : args) {
             printlnComment("Reading arg: " + arg);
             File fsEntry = new File(arg);
             List<File> recursiveFiles = getAllSubFiles(fsEntry);
-            files.addAll(recursiveFiles);
+            printlnComment("- Files found for arg: " + recursiveFiles.size());
+            printlnComment("- Calculating hashes.");
+            for (File file : recursiveFiles) {
+                String hash = getFileDigestHex(file, DIGEST_ALGORITHM_SHA_256);
+                List<File> matchingFiles = fileListsByHash.computeIfAbsent(
+                    hash,
+                    h -> new ArrayList<>()
+                );
+                matchingFiles.add(file);
+            }
         }
-        Map<String, List<File>> fileListsByHash = files
-            .stream()
-            .collect(groupingFilesByHash(DIGEST_ALGORITHM_SHA_256));
         write(System.out, ESCAPER, DELIMITER, fileListsByHash);
     }
 
@@ -84,20 +89,6 @@ public class UniqueFiles {
     public static String getFileDigestHex(File file, String algorithm) throws Exception {
         byte[] digestBytes = getFileDigestBytes(file, algorithm);
         return getAsHex(digestBytes);
-    }
-
-    public static Collector<File, ?, Map<String, List<File>>> groupingFilesByHash(String algorithm) {
-        return Collectors.groupingBy(file -> {
-            try {
-                return getFileDigestHex(file, algorithm);
-            }
-            catch (RuntimeException rex) {
-                throw rex;
-            }
-            catch (Throwable ex) {
-                throw new RuntimeException(ex);
-            }
-        });
     }
 
     public static String escape(String original, String escaper, String delimiter) {
